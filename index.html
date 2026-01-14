@@ -158,6 +158,9 @@
                 const name = profile.full_name || 'Anonymous';
                 const username = profile.username || 'user';
                 const bio = profile.bio || 'No bio available';
+                const followers = (profile.followers || 0).toLocaleString();
+                const docs = (profile.documents || 0).toLocaleString();
+                const views = (profile.views || 0).toLocaleString();
                 const avatar = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
 
                 const cardHTML = `
@@ -181,6 +184,20 @@
 
                             <p class="text-gray-300 text-sm mb-4 leading-relaxed line-clamp-2">${bio}</p>
                             
+                            <div class="flex gap-6 border-t border-gray-700/50 pt-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-white font-bold text-sm">${followers}</span>
+                                    <span class="text-gray-500 text-xs">Followers</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-white font-bold text-sm">${docs}</span>
+                                    <span class="text-gray-500 text-xs">Docs</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-white font-bold text-sm">${views}</span>
+                                    <span class="text-gray-500 text-xs">Views</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 `;
