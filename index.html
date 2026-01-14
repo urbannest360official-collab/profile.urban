@@ -158,9 +158,6 @@
                 const name = profile.full_name || 'Anonymous';
                 const username = profile.username || 'user';
                 const bio = profile.bio || 'No bio available';
-                const followers = (profile.followers || 0).toLocaleString();
-                const docs = (profile.documents || 0).toLocaleString();
-                const views = (profile.views || 0).toLocaleString();
                 const avatar = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
 
                 const cardHTML = `
