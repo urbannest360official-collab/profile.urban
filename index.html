@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase Profiles - Export to Excel</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- SheetJS (XLSX) for Excel Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-4 sm:p-8">
+
+    <div class="max-w-5xl mx-auto">
+        <!-- Header Section with Stats and Actions -->
+        <header class="flex flex-col md:flex-row justify-between items-center mb-8 gap-6 border-b border-gray-800 pb-8">
+            <div class="text-center md:text-left">
+                <h1 class="text-3xl sm:text-4xl font-bold text-white mb-2">User Profiles</h1>
+                <div class="flex items-center justify-center md:justify-start gap-2">
+                    <p class="text-gray-400">Manage and export user data.</p>
+                    <!-- Connection Status Badge -->
+                    <div id="status-badge" class="hidden">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-900/50 text-yellow-200 border border-yellow-700/50">
+                            Demo Mode
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Bar -->
+            <div class="flex items-center gap-3">
+                <!-- Total Count Card -->
+                <div class="bg-gray-800 px-5 py-2.5 rounded-xl border border-gray-700 flex flex-col items-center justify-center min-w-[100px]">
+                    <span class="text-gray-400 text-xs uppercase font-semibold tracking-wider">Total Users</span>
+                    <span id="total-count" class="text-2xl font-bold text-white leading-none mt-1">0</span>
+                </div>
+
+                <!-- Export Button -->
+                <button onclick="exportToExcel()" id="export-btn" class="group bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-3 rounded-xl font-medium transition-all flex items-center gap-2 shadow-lg shadow-emerald-900/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                    </svg>
+                    <span>Export Excel</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Search Input -->
+        <div class="mb-6 relative">
+            <input 
+                type="text" 
+                id="searchInput"
+                placeholder="Search by name, username, or bio..."
+                class="w-full bg-gray-800 border border-gray-700 text-white rounded-xl p-4 pl-12 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-lg placeholder-gray-500"
+            >
+            <svg class="w-6 h-6 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+        </div>
+
+        <!-- Profile Cards Container -->
+        <div id="profile-container" class="space-y-4">
+            <!-- Loader -->
+            <div id="loader" class="text-center text-gray-400 py-12">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mb-2"></div>
+                <p>Loading profiles...</p>
+            </div>
+        </div>
+        
+        <!-- No Results Message -->
+        <div id="no-results" class="hidden text-center py-12">
+            <div class="bg-gray-800/50 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            </div>
+            <p class="text-gray-400 text-lg">No users found matching your search.</p>
+            <button onclick="document.getElementById('searchInput').value=''; fetchProfiles();" class="mt-4 text-blue-400 hover:text-blue-300 font-medium">Clear Search</button>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        const SUPABASE_URL = 'https://ckckhntlyztpijjunyro.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrY2tobnRseXp0cGlqanVueXJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk4MTM4OTgsImV4cCI6MjA2NTM4OTg5OH0.DueGzFFw3a3y8zMpW03yoVr48Dc4iCuE1o-CdBIOrUU';
+
+        // --- MOCK DATA ---
+        const mockProfiles = [
+            { id: 1, full_name: "Sarah Jenkins", username: "sarah_dev", avatar_url: "https://i.pravatar.cc/150?u=sarah", bio: "Full-stack developer loving React and Supabase.", followers: 1240, documents: 45, views: 12500, created_at: "2023-01-15T10:00:00Z" },
+            { id: 2, full_name: "Alex Chen", username: "alexc", avatar_url: "https://i.pravatar.cc/150?u=alex", bio: "Digital artist and UI designer.", followers: 850, documents: 12, views: 5400, created_at: "2023-03-22T14:30:00Z" },
+            { id: 3, full_name: "Jordan Smith", username: "jsmith_pro", avatar_url: "https://i.pravatar.cc/150?u=jordan", bio: "Tech enthusiast. Writing about AI.", followers: 3200, documents: 89, views: 45000, created_at: "2022-11-05T09:15:00Z" },
+            { id: 4, full_name: "Emily Davis", username: "emily_writes", avatar_url: "https://i.pravatar.cc/150?u=emily", bio: "Content creator and copywriter.", followers: 2100, documents: 150, views: 32000, created_at: "2023-05-10T11:20:00Z" },
+            { id: 5, full_name: "Michael Brown", username: "mike_codes", avatar_url: "https://i.pravatar.cc/150?u=mike", bio: "Backend engineer focused on scalability.", followers: 500, documents: 10, views: 1200, created_at: "2023-07-01T08:45:00Z" }
+        ];
+
+        // --- STATE ---
+        let supabaseClient = null;
+        let currentDisplayedData = []; // Store currently visible data for export
+
+        try {
+            if (window.supabase && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            }
+        } catch (err) {
+            console.error("Supabase init failed:", err);
+        }
+
+        // DOM Elements
+        const searchInput = document.getElementById('searchInput');
+        const profileContainer = document.getElementById('profile-container');
+        const loader = document.getElementById('loader');
+        const noResults = document.getElementById('no-results');
+        const statusBadge = document.getElementById('status-badge');
+        const totalCountEl = document.getElementById('total-count');
+        const exportBtn = document.getElementById('export-btn');
+
+        // --- FUNCTIONS ---
+
+        function renderProfiles(profiles) {
+            profileContainer.innerHTML = '';
+            loader.style.display = 'none';
+            
+            // Update State
+            currentDisplayedData = profiles || [];
+            
+            // Update Count
+            totalCountEl.textContent = currentDisplayedData.length;
+
+            // Enable/Disable Export
+            exportBtn.disabled = currentDisplayedData.length === 0;
+            if(currentDisplayedData.length === 0) {
+                exportBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                exportBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+
+            if (!profiles || profiles.length === 0) {
+                noResults.style.display = 'block';
+                return;
+            }
+            
+            noResults.style.display = 'none';
+
+            profiles.forEach(profile => {
+                const joinDate = new Date(profile.created_at).toLocaleDateString('en-US', {
+                    month: 'short', year: 'numeric'
+                });
+
+                const name = profile.full_name || 'Anonymous';
+                const username = profile.username || 'user';
+                const bio = profile.bio || 'No bio available';
+                const followers = (profile.followers || 0).toLocaleString();
+                const docs = (profile.documents || 0).toLocaleString();
+                const views = (profile.views || 0).toLocaleString();
+                const avatar = profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
+
+                const cardHTML = `
+                    <div class="fade-in bg-gray-800 border border-gray-700 rounded-xl p-6 flex flex-col sm:flex-row items-start gap-6 hover:border-gray-600 hover:bg-gray-800/80 transition-all duration-300 shadow-sm hover:shadow-md">
+                        <div class="relative group flex-shrink-0">
+                            <img src="${avatar}" alt="${name}" 
+                                class="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 border-gray-600 object-cover bg-gray-700"
+                                onerror="this.onerror=null;this.src='https://placehold.co/100x100/1a202c/64748b?text=User';">
+                        </div>
+                        
+                        <div class="flex-grow w-full">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                                <div>
+                                    <h2 class="text-xl font-bold text-white leading-tight">${name}</h2>
+                                    <p class="text-blue-400 text-sm font-medium">@${username}</p>
+                                </div>
+                                <span class="self-start sm:self-auto text-gray-500 text-xs">
+                                    Joined ${joinDate}
+                                </span>
+                            </div>
+
+                            <p class="text-gray-300 text-sm mb-4 leading-relaxed line-clamp-2">${bio}</p>
+                            
+                            <div class="flex gap-6 border-t border-gray-700/50 pt-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-white font-bold text-sm">${followers}</span>
+                                    <span class="text-gray-500 text-xs">Followers</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-white font-bold text-sm">${docs}</span>
+                                    <span class="text-gray-500 text-xs">Docs</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-white font-bold text-sm">${views}</span>
+                                    <span class="text-gray-500 text-xs">Views</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                profileContainer.innerHTML += cardHTML;
+            });
+        }
+
+        async function fetchProfiles(searchTerm = '') {
+            loader.style.display = 'block';
+            noResults.style.display = 'none';
+            profileContainer.innerHTML = ''; 
+
+            let data = [];
+            let usedMock = false;
+
+            if (supabaseClient) {
+                try {
+                    let query = supabaseClient.from('profiles').select('*');
+
+                    if (searchTerm) {
+                        query = query.or(`full_name.ilike.%${searchTerm}%,username.ilike.%${searchTerm}%`);
+                    }
+
+                    const response = await query;
+                    
+                    if (response.error) throw response.error;
+                    
+                    if ((!response.data || response.data.length === 0) && !searchTerm) {
+                       throw new Error("Empty table");
+                    }
+
+                    data = response.data;
+
+                } catch (error) {
+                    console.warn("Supabase fetch failed (falling back to mock data):", error.message);
+                    usedMock = true;
+                }
+            } else {
+                usedMock = true;
+            }
+
+            if (usedMock) {
+                statusBadge.classList.remove('hidden');
+                if (searchTerm) {
+                    const term = searchTerm.toLowerCase();
+                    data = mockProfiles.filter(p => 
+                        p.full_name.toLowerCase().includes(term) || 
+                        p.username.toLowerCase().includes(term) ||
+                        p.bio.toLowerCase().includes(term)
+                    );
+                } else {
+                    data = mockProfiles;
+                }
+            } else {
+                statusBadge.classList.add('hidden');
+            }
+
+            renderProfiles(data);
+        }
+
+        // --- EXPORT FUNCTION ---
+        function exportToExcel() {
+            if (currentDisplayedData.length === 0) {
+                alert("No data to export!");
+                return;
+            }
+
+            // 1. Prepare data for Excel (Clean up formatting if needed)
+            const exportData = currentDisplayedData.map(item => ({
+                "User ID": item.id,
+                "Full Name": item.full_name,
+                "Username": item.username,
+                "Followers": item.followers,
+                "Documents": item.documents,
+                "Total Views": item.views,
+                "Joined Date": new Date(item.created_at).toLocaleDateString(),
+                "Bio": item.bio
+            }));
+
+            // 2. Create a new Workbook
+            const workbook = XLSX.utils.book_new();
+
+            // 3. Create a new Worksheet
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+
+            // Adjust column widths automatically
+            const wscols = [
+                {wch: 10}, // ID
+                {wch: 20}, // Name
+                {wch: 15}, // Username
+                {wch: 10}, // Followers
+                {wch: 10}, // Docs
+                {wch: 10}, // Views
+                {wch: 15}, // Date
+                {wch: 50}  // Bio
+            ];
+            worksheet['!cols'] = wscols;
+
+            // 4. Append Worksheet to Workbook
+            XLSX.utils.book_append_sheet(workbook, worksheet, "User Profiles");
+
+            // 5. Generate file name with timestamp
+            const dateStr = new Date().toISOString().split('T')[0];
+            const fileName = `user_profiles_export_${dateStr}.xlsx`;
+
+            // 6. Write file and trigger download
+            XLSX.writeFile(workbook, fileName);
+        }
+
+        const debouncedSearch = debounce((term) => fetchProfiles(term), 300);
+
+        function debounce(func, delay) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), delay);
+            };
+        }
+
+        searchInput.addEventListener('input', (e) => {
+            debouncedSearch(e.target.value.trim());
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchProfiles();
+        });
+
+    </script>
+</body>
+</html>
